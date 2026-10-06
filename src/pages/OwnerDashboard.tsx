@@ -1,0 +1,1 @@
+import DashboardView from '../components/DashboardView'; export default function OwnerDashboard() { return <DashboardView role="owner" />; }
