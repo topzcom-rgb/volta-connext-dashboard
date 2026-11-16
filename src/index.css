@@ -4,34 +4,83 @@
 
 :root {
   color-scheme: light;
+  --volta-canvas: #F7F6F9;
+  --volta-surface: #FFFFFF;
+  --volta-ink: #16111D;
+  --volta-plum: #6D288A;
+  --volta-gold: #B58A28;
+  --volta-border: rgba(109, 40, 138, 0.14);
 }
 
 :root.dark {
   color-scheme: dark;
+  --volta-canvas: #0C0910;
+  --volta-surface: #15101C;
+  --volta-ink: #F3F0F7;
+  --volta-plum: #B975DB;
+  --volta-gold: #E2B95B;
+  --volta-border: rgba(185, 117, 219, 0.22);
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: 'Plus Jakarta Sans', 'Noto Sans Thai', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--volta-canvas);
+  color: var(--volta-ink);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  -webkit-font-smoothing: antialiased;
 }
 
-html.dark body {
-  background-color: #0f0a14;
-  color: #f1f5f9;
+.font-mono-num {
+  font-family: 'JetBrains Mono', 'Plus Jakarta Sans', monospace;
+  font-variant-numeric: tabular-nums;
 }
 
-/* Custom Scrollbar for sleek look in dark mode */
-html.dark ::-webkit-scrollbar {
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: 400px;
+}
+
+/* Precision grid background for login hero */
+.volta-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(109, 40, 138, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(109, 40, 138, 0.06) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+html.dark .volta-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(185, 117, 219, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(185, 117, 219, 0.08) 1px, transparent 1px);
+}
+
+/* Sleek scrollbar */
+::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-html.dark ::-webkit-scrollbar-track {
-  background: #130d1b;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-html.dark ::-webkit-scrollbar-thumb {
-  background: #3c2452;
+::-webkit-scrollbar-thumb {
+  background: rgba(109, 40, 138, 0.22);
   border-radius: 9999px;
 }
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(185, 117, 219, 0.28);
+}
 html.dark ::-webkit-scrollbar-thumb:hover {
-  background: #5c2771;
+  background: rgba(185, 117, 219, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

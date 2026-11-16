@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Cookies from 'js-cookie'
 import { 
@@ -23,7 +23,6 @@ import {
   FileText
 } from 'lucide-react'
 import ThemeToggle from '../components/ThemeToggle'
-import { generateAllSnapshotsFromRows } from '../utils/snapshotGenerator'
 
 export default function AdminStations() {
   const [stations, setStations] = useState<any[]>([])
@@ -314,7 +313,8 @@ export default function AdminStations() {
       setUploadStatusText('กำลังประมวลผล Auto-Precomputed Snapshots (คำนวณกราฟและสถิติล่วงหน้า)...');
       setUploadProgress(20);
 
-      // 1. Generate full snapshot bundle in memory
+      // 1. Dynamically load snapshot generator only when uploading CSV (bundle-conditional)
+      const { generateAllSnapshotsFromRows } = await import('../utils/snapshotGenerator');
       const bundle = generateAllSnapshotsFromRows(parsedRows);
       
       // Save local backup immediately
@@ -407,54 +407,58 @@ export default function AdminStations() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const safeStations = useMemo(() => (Array.isArray(stations) ? stations : []), [stations]);
+  const safeAdmins = Array.isArray(admins) ? admins : [];
+
+  const filteredStations = useMemo(() => {
+    const q = searchFilter.trim().toLowerCase();
+    if (!q) return safeStations;
+    return safeStations.filter(
+      s => s?.charger_name?.toLowerCase().includes(q) || (s?.phone_number && s.phone_number.includes(q))
+    );
+  }, [safeStations, searchFilter]);
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#faf8fc] dark:bg-[#0f0a14] flex flex-col items-center justify-center space-y-4">
-        <div className="w-10 h-10 border-4 border-[#7F3F98] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm font-medium text-[#7F3F98] dark:text-[#c084fc]">กำลังโหลดข้อมูลการจัดการ...</p>
+      <div className="min-h-screen bg-[#F7F6F9] dark:bg-[#0C0910] flex flex-col items-center justify-center gap-3">
+        <div className="w-10 h-10 border-2 border-[#6D288A] dark:border-[#E2B95B] border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs sm:text-sm font-medium text-slate-600 dark:text-slate-300">กำลังโหลดข้อมูลการจัดการ...</p>
       </div>
     )
   }
 
-  const safeStations = Array.isArray(stations) ? stations : [];
-  const safeAdmins = Array.isArray(admins) ? admins : [];
-
-  const filteredStations = safeStations.filter(s => 
-    s?.charger_name?.toLowerCase().includes(searchFilter.toLowerCase()) ||
-    (s?.phone_number && s.phone_number.includes(searchFilter))
-  );
-
   return (
-    <div className="min-h-screen bg-[#faf8fc] dark:bg-[#0f0a14] p-3 sm:p-6 text-slate-800 dark:text-slate-100 font-sans antialiased transition-colors duration-300">
-      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+    <div className="min-h-screen bg-[#F7F6F9] dark:bg-[#0C0910] p-4 sm:p-6 text-[#16111D] dark:text-[#F3F0F7] antialiased">
+      <div className="max-w-6xl mx-auto space-y-5">
         
         {/* Top Header Card */}
-        <div className="flex flex-wrap justify-between items-center gap-3 bg-white dark:bg-[#1a1224] p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-[#7F3F98]/15 dark:border-[#7F3F98]/30 shadow-xs transition-colors">
+        <div className="flex flex-wrap justify-between items-center gap-3 bg-white dark:bg-[#15101C] p-5 rounded-xl border border-slate-200/80 dark:border-[#B975DB]/20">
           <div>
-            <div className="flex items-center space-x-1.5 text-[10px] sm:text-xs font-bold text-[#7F3F98] dark:text-[#c084fc] mb-0.5">
-              <ShieldCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#B58E38] dark:text-[#deb965]" />
-              <span>ADMINISTRATION & DATA PORTAL</span>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-[#6D288A] dark:text-[#E2B95B] mb-1">
+              <ShieldCheck className="w-4 h-4 text-[#B58A28] dark:text-[#E2B95B]" />
+              <span>ศูนย์จัดการระบบและฐานข้อมูล</span>
             </div>
-            <h1 className="text-lg sm:text-2xl font-extrabold text-slate-900 dark:text-white">จัดการข้อมูลและสิทธิ์ระบบ</h1>
-            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              อัปเดตข้อมูล CSV เข้า Cloudflare D1, จัดการเบอร์ Admin และเบอร์ประจำสถานี
+            <h1 className="text-xl sm:text-2xl font-extrabold text-[#16111D] dark:text-white">จัดการข้อมูลและสิทธิ์การใช้งาน</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              อัปเดตข้อมูล CSV เข้า Supabase, จัดการเบอร์ผู้ดูแลระบบ และกำหนดเบอร์โทรศัพท์ประจำสถานี
             </p>
           </div>
           
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             <ThemeToggle />
             <button 
+              type="button"
               onClick={() => navigate('/admin')} 
-              className="flex items-center space-x-1.5 sm:space-x-2 text-[11px] sm:text-xs font-bold px-3 sm:px-4 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-[#7F3F98]/10 dark:bg-[#7F3F98]/25 text-[#7F3F98] dark:text-[#c084fc] hover:bg-[#7F3F98]/20 dark:hover:bg-[#7F3F98]/35 transition border border-[#7F3F98]/25 cursor-pointer shadow-2xs shrink-0"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg bg-[#6D288A] hover:bg-[#581E70] text-white transition-colors cursor-pointer shrink-0"
             >
-              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <ArrowLeft className="w-3.5 h-3.5" />
               <span>กลับหน้า Dashboard</span>
             </button>
           </div>
         </div>
 
-        {/* Section 1: CSV Uploader Card (Drag & Drop to Cloudflare D1) */}
-        <div className="bg-white dark:bg-[#1a1224] rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-[#7F3F98]/20 dark:border-[#7F3F98]/30 shadow-xs space-y-4 sm:space-y-5 transition-colors">
+        {/* Section 1: CSV Uploader Card */}
+        <div className="bg-white dark:bg-[#15101C] rounded-xl p-5 border border-slate-200/80 dark:border-[#B975DB]/20 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800/80 pb-3 sm:pb-4">
             <div className="flex items-center space-x-2.5 sm:space-x-3">
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br from-[#7F3F98] to-[#5c2771] text-white flex items-center justify-center shadow-xs shrink-0">
@@ -813,12 +817,13 @@ export default function AdminStations() {
                             placeholder="เช่น 0812345678, 0898765432"
                             onBlur={(e) => {
                               const val = e.target.value;
-                              const updated = [...stations];
-                              const targetIdx = updated.findIndex(item => item.charger_name === st.charger_name);
-                              if (targetIdx !== -1) {
-                                updated[targetIdx].phone_number = val;
-                                setStations(updated);
-                              }
+                              setStations(prev =>
+                                prev.map(item =>
+                                  item.charger_name === st.charger_name
+                                    ? { ...item, phone_number: val }
+                                    : item
+                                )
+                              );
                             }}
                             className="w-full max-w-md text-xs bg-white dark:bg-[#251a33] border border-slate-200 dark:border-[#7F3F98]/30 text-slate-900 dark:text-white rounded-lg sm:rounded-xl px-2.5 sm:px-3 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-[#7F3F98]/30 focus:border-[#7F3F98]"
                           />

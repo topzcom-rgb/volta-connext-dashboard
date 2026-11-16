@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Cookies from 'js-cookie'
 import { 
@@ -40,6 +40,31 @@ import {
 import { useTheme } from '../context/ThemeContext'
 import ThemeToggle from '../components/ThemeToggle'
 
+const THEME_PURPLE = '#6D288A'
+const THEME_GOLD = '#B58A28'
+
+function getHealthBadge(score: number) {
+  if (score >= 85) {
+    return {
+      bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+      dot: 'bg-emerald-500',
+      text: `ความสมบูรณ์ ${score}/100 (ระดับดีเยี่ยม)`
+    }
+  }
+  if (score >= 65) {
+    return {
+      bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      dot: 'bg-amber-500',
+      text: `ความสมบูรณ์ ${score}/100 (ต้องเฝ้าระวัง)`
+    }
+  }
+  return {
+    bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+    dot: 'bg-rose-500',
+    text: `ความสมบูรณ์ ${score}/100 (ควรเข้าตรวจสอบ)`
+  }
+}
+
 export default function InsightsView() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -52,138 +77,118 @@ export default function InsightsView() {
   const phone = Cookies.get('auth_phone')
   const role = Cookies.get('auth_role') || 'owner'
 
-  const fetchInsights = (station: string) => {
+  useEffect(() => {
     if (!phone) {
       navigate('/')
       return
     }
 
+    const controller = new AbortController()
     setLoading(true)
 
-    // Check local snapshot bundle first for instant display
     try {
       const localBundleStr = localStorage.getItem('local_snapshots_bundle')
       if (localBundleStr) {
         const localMap = JSON.parse(localBundleStr)
-        const key = `insights__${station}`
+        const key = `insights__${filterStation}`
         if (localMap[key]) {
           setData(localMap[key])
           setLoading(false)
         }
       }
-    } catch (e) {}
+    } catch {
+      // Ignore invalid local cache
+    }
 
-    fetch(`/api/insights?phone=${phone}&role=${role}&station=${station}`)
+    fetch(`/api/insights?phone=${phone}&role=${role}&station=${filterStation}`, {
+      signal: controller.signal
+    })
       .then(res => res.json())
       .then(d => {
         if (!d.error) {
-          setData(d);
+          setData(d)
         }
-        setLoading(false);
+        setLoading(false)
       })
       .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
-  }
+        if (err.name !== 'AbortError') {
+          console.error(err)
+          setLoading(false)
+        }
+      })
 
-  useEffect(() => {
-    fetchInsights(filterStation);
-  }, [filterStation]);
+    return () => controller.abort()
+  }, [filterStation, phone, role, navigate])
 
-  const THEME_PURPLE = '#7F3F98'
-  const THEME_GOLD = '#B58E38'
+  const currentBadge = useMemo(() => getHealthBadge(data?.healthScore || 0), [data?.healthScore])
+  const availableStations = data?.availableStations || []
+  const isSingleStation = filterStation !== 'all'
+
+  const retentionSummary = data?.retentionChurnData?.summary || {}
+  const retentionSegments = data?.retentionChurnData?.segments || []
+  const topLoyalCustomers = useMemo(() => {
+    const list = data?.retentionChurnData?.topLoyalCustomers || []
+    if (retentionFilter === 'all') return list
+    return list.filter((u: any) => u.status === retentionFilter)
+  }, [data?.retentionChurnData?.topLoyalCustomers, retentionFilter])
+
+  const personaList = data?.personaData?.personas || []
+  const speedDist = data?.personaData?.speedDistribution || []
 
   if (loading && !data) {
     return (
-      <div className="min-h-screen bg-[#3f1d4c] dark:bg-[#130d1b] flex flex-col items-center justify-center space-y-4">
-        <div className="w-12 h-12 border-4 border-[#B58E38] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-white font-medium text-sm animate-pulse tracking-wide">
+      <div className="min-h-screen bg-[#F7F6F9] dark:bg-[#0C0910] flex flex-col items-center justify-center gap-3">
+        <div className="w-10 h-10 border-2 border-[#6D288A] dark:border-[#E2B95B] border-t-transparent rounded-full animate-spin" />
+        <p className="text-slate-600 dark:text-slate-300 font-medium text-xs sm:text-sm">
           กำลังประมวลผลข้อมูลการเติบโตและการตรวจจับความผิดปกติ...
         </p>
       </div>
     )
   }
 
-  const healthBadge = () => {
-    const score = data?.healthScore || 0;
-    if (score >= 85) {
-      return {
-        bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-        dot: 'bg-emerald-500',
-        text: `ความสมบูรณ์ ${score}/100 (ระดับดีเยี่ยม)`
-      };
-    }
-    if (score >= 65) {
-      return {
-        bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-        dot: 'bg-amber-500',
-        text: `ความสมบูรณ์ ${score}/100 (ต้องเฝ้าระวัง)`
-      };
-    }
-    return {
-      bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
-      dot: 'bg-rose-500',
-      text: `ความสมบูรณ์ ${score}/100 (ควรเข้าตรวจสอบ)`
-    };
-  };
-
-  const currentBadge = healthBadge();
-  const availableStations = data?.availableStations || [];
-  const isSingleStation = filterStation !== 'all';
-
-  const retentionSummary = data?.retentionChurnData?.summary || {};
-  const retentionSegments = data?.retentionChurnData?.segments || [];
-  const topLoyalCustomers = (data?.retentionChurnData?.topLoyalCustomers || []).filter((u: any) => {
-    if (retentionFilter === 'all') return true;
-    return u.status === retentionFilter;
-  });
-
-  const personaList = data?.personaData?.personas || [];
-  const speedDist = data?.personaData?.speedDistribution || [];
-
   return (
-    <div className="min-h-screen bg-[#faf8fc] dark:bg-[#0f0a14] text-slate-800 dark:text-slate-100 font-sans antialiased selection:bg-[#7F3F98] selection:text-white flex flex-col justify-between transition-colors duration-300">
+    <div className="min-h-screen bg-[#F7F6F9] dark:bg-[#0C0910] text-[#16111D] dark:text-[#F3F0F7] antialiased selection:bg-[#6D288A] selection:text-white flex flex-col justify-between">
       
       <div>
-        {/* Top Header Glass Bar */}
-        <nav className="sticky top-0 z-40 backdrop-blur-md bg-white/90 dark:bg-[#130d1b]/90 border-b border-[#7F3F98]/15 dark:border-[#7F3F98]/30 shadow-2xs">
-          <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2">
+        {/* Top Header Bar */}
+        <nav className="sticky top-0 z-40 backdrop-blur-md bg-white/95 dark:bg-[#15101C]/95 border-b border-slate-200/80 dark:border-white/10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2">
             
             {/* Brand */}
-            <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-[#7F3F98] to-[#9d5ab8] flex items-center justify-center text-white shadow-sm shadow-[#7F3F98]/20 border border-[#B58E38]/50">
-                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="w-9 h-9 rounded-lg bg-[#6D288A] flex items-center justify-center text-white border border-[#E2B95B]/40">
+                <TrendingUp className="w-4.5 h-4.5 text-[#E2B95B]" />
               </div>
               <div>
-                <div className="flex items-center space-x-1 sm:space-x-2">
-                  <span className="font-extrabold text-sm sm:text-base tracking-tight text-[#7F3F98] dark:text-[#c084fc]">VOLTA</span>
-                  <span className="text-[9px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-[#B58E38]/15 dark:bg-[#B58E38]/30 text-[#B58E38] dark:text-[#deb965] border border-[#B58E38]/30 dark:border-[#deb965]/40">
-                    GROWTH & HEALTH
+                <div className="flex items-center gap-1.5">
+                  <span className="font-extrabold text-sm sm:text-base tracking-tight text-[#16111D] dark:text-white">VOLTA</span>
+                  <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-[#FAF5E9] dark:bg-[#261E12] text-[#B58A28] dark:text-[#E2B95B] border border-[#B58A28]/25">
+                    INSIGHTS
                   </span>
                 </div>
-                <p className="text-[9px] sm:text-[11px] text-slate-400 dark:text-slate-500 -mt-0.5 hidden xs:block">การวิเคราะห์การเติบโต พยากรณ์ และตรวจสอบความผิดปกติ</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 hidden sm:block">วิเคราะห์การเติบโต พยากรณ์ และความสมบูรณ์เครือข่าย</p>
               </div>
             </div>
 
             {/* Actions: User Status, Theme Toggle & Back Button */}
-            <div className="flex items-center space-x-2">
-              <div className="hidden md:flex items-center space-x-2 bg-[#f6edfa] dark:bg-[#251a33] py-1 px-3 rounded-full border border-[#eddcf5] dark:border-[#7F3F98]/30">
+            <div className="flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-1.5 bg-[#F7F6F9] dark:bg-[#1D1528] py-1.5 px-3 rounded-lg border border-slate-200 dark:border-white/10">
                 {role === 'admin' ? (
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#7F3F98] dark:text-[#c084fc]" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#6D288A] dark:text-[#B975DB]" />
                 ) : (
-                  <UserCheck className="w-3.5 h-3.5 text-[#B58E38] dark:text-[#deb965]" />
+                  <UserCheck className="w-3.5 h-3.5 text-[#B58A28] dark:text-[#E2B95B]" />
                 )}
-                <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
-                  {role === 'admin' ? 'ผู้ดูแลระบบ (Admin)' : 'Owner'}
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  {role === 'admin' ? 'ผู้ดูแลระบบ (Admin)' : 'เจ้าของสถานี'}
                 </span>
               </div>
               <ThemeToggle />
               <button
+                type="button"
                 onClick={() => navigate(role === 'admin' ? '/admin' : '/dashboard')}
-                className="inline-flex items-center space-x-1 sm:space-x-2 text-[11px] sm:text-xs font-bold px-3 sm:px-4 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-[#7F3F98]/10 dark:bg-[#7F3F98]/25 text-[#7F3F98] dark:text-[#c084fc] hover:bg-[#7F3F98]/20 dark:hover:bg-[#7F3F98]/35 transition border border-[#7F3F98]/25 cursor-pointer shadow-2xs shrink-0"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-[#6D288A] hover:bg-[#581E70] text-white transition-colors cursor-pointer shrink-0"
               >
-                <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <ArrowLeft className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">กลับหน้า</span>
                 <span>Dashboard</span>
               </button>
@@ -192,17 +197,17 @@ export default function InsightsView() {
         </nav>
 
         {/* Main Content Workspace */}
-        <main className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-5 sm:space-y-6">
           
-          {/* Station Selector Bar (Admin & Station Owners) */}
-          <section className="bg-white dark:bg-[#1a1224] rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-[#7F3F98]/15 dark:border-[#7F3F98]/30 shadow-xs flex flex-wrap items-center justify-between gap-3 transition-colors">
-            <div className="flex items-center space-x-2.5 sm:space-x-3">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl sm:rounded-2xl bg-[#f6edfa] dark:bg-[#251a33] flex items-center justify-center text-[#7F3F98] dark:text-[#c084fc] shadow-2xs shrink-0">
-                <Building2 className="w-4 h-4 sm:w-5 sm:h-5" />
+          {/* Station Selector Bar */}
+          <section className="bg-white dark:bg-[#15101C] rounded-xl p-4 border border-slate-200/80 dark:border-[#B975DB]/20 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-[#F3EEF7] dark:bg-[#1D1528] flex items-center justify-center text-[#6D288A] dark:text-[#B975DB] shrink-0">
+                <Building2 className="w-4 h-4" />
               </div>
               <div>
-                <h2 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">ขอบเขตการวิเคราะห์ (Analysis Scope)</h2>
-                <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-400">
+                <h2 className="text-xs sm:text-sm font-bold text-[#16111D] dark:text-white">ขอบเขตการวิเคราะห์</h2>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   {isSingleStation 
                     ? `เจาะจงสถานี: ${filterStation}`
                     : `ภาพรวมทั้งเครือข่าย (${availableStations.length} สถานี)`}
@@ -211,36 +216,37 @@ export default function InsightsView() {
             </div>
 
             {/* Station Dropdown Filter */}
-            <div className="flex items-center space-x-2 w-full sm:w-auto">
-              <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#7F3F98] dark:text-[#c084fc] shrink-0" />
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Filter className="w-4 h-4 text-[#6D288A] dark:text-[#B975DB] shrink-0" />
               <select
+                aria-label="เลือกสถานีสำหรับวิเคราะห์"
                 value={filterStation}
                 onChange={e => setFilterStation(e.target.value)}
-                className="text-xs bg-[#faf8fc] dark:bg-[#251a33] border border-[#7F3F98]/25 dark:border-[#7F3F98]/40 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 font-bold text-slate-800 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-[#7F3F98]/30 cursor-pointer w-full sm:w-auto shadow-2xs transition-colors"
+                className="text-xs bg-[#F7F6F9] dark:bg-[#0C0910] border border-slate-200 dark:border-[#B975DB]/25 rounded-lg px-3 py-2 font-semibold text-[#16111D] dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#6D288A] cursor-pointer w-full sm:w-auto"
               >
-                {(role === 'admin' || availableStations.length > 1) && (
+                {(role === 'admin' || availableStations.length > 1) ? (
                   <option value="all">
                     {role === 'admin' 
-                      ? `🏢 ทุกสถานีในเครือข่าย (${availableStations.length} สถานี)`
-                      : `🏢 ภาพรวมสถานีของคุณ (${availableStations.length} สถานี)`}
+                      ? `ทุกสถานีในเครือข่าย (${availableStations.length} สถานี)`
+                      : `ภาพรวมสถานีของคุณ (${availableStations.length} สถานี)`}
                   </option>
-                )}
+                ) : null}
                 {availableStations.map((st: string) => (
-                  <option key={st} value={st}>⚡ {st}</option>
+                  <option key={st} value={st}>{st}</option>
                 ))}
               </select>
-              {loading && <RefreshCw className="w-3.5 h-3.5 text-[#7F3F98] dark:text-[#c084fc] animate-spin shrink-0" />}
+              {loading ? <RefreshCw className="w-3.5 h-3.5 text-[#6D288A] dark:text-[#B975DB] animate-spin shrink-0" /> : null}
             </div>
           </section>
 
           {/* Executive Overview Banner & Health Scorecard */}
-          <section className="bg-gradient-to-r from-[#3f1d4c] via-[#5c2771] to-[#3f1d4c] dark:from-[#240c2d] dark:via-[#3d164d] dark:to-[#240c2d] rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-white shadow-md border border-[#B58E38]/30 space-y-3.5 sm:space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/15 pb-3 sm:pb-4">
+          <section className="bg-[#16111D] dark:bg-[#15101C] rounded-xl p-5 sm:p-6 text-white border border-[#B58A28]/30 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
               <div className="space-y-1">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#deb965]" />
-                  <span className="text-[10px] sm:text-xs font-bold tracking-widest text-[#deb965] uppercase">
-                    SYSTEM HEALTH & EXECUTIVE INSIGHTS
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#E2B95B]" />
+                  <span className="text-xs font-semibold text-[#E2B95B]">
+                    สรุปผู้บริหารและความสมบูรณ์ระบบ
                   </span>
                 </div>
                 <h1 className="text-lg sm:text-2xl font-extrabold text-white">
@@ -248,17 +254,17 @@ export default function InsightsView() {
                     ? `ผลการวิเคราะห์เชิงลึก: ${filterStation}`
                     : `สรุปผลการวิเคราะห์เชิงลึกและสถานะความพร้อมเครือข่าย`}
                 </h1>
-                <p className="text-[10px] sm:text-xs text-slate-300">
+                <p className="text-xs text-slate-300">
                   {isSingleStation 
                     ? `การวิเคราะห์เฉพาะสถานีในสังกัด การไฟฟ้าส่วนภูมิภาค เขต 2 (ภาคเหนือ)`
-                    : `ครอบคลุม ${data.allowedStations?.length || 13} สถานีหลักในพื้นที่ การไฟฟ้าส่วนภูมิภาค เขต 2 (ภาคเหนือ)`}
+                    : `ครอบคลุม ${data?.allowedStations?.length || 14} สถานีหลักในพื้นที่ การไฟฟ้าส่วนภูมิภาค เขต 2 (ภาคเหนือ)`}
                 </p>
               </div>
 
               {/* Health Score Pill */}
-              <div className={`flex items-center space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl border ${currentBadge.bg} shadow-sm text-xs`}>
-                <span className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${currentBadge.dot} animate-pulse`}></span>
-                <span className="font-bold text-[11px] sm:text-xs">{currentBadge.text}</span>
+              <div className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border ${currentBadge.bg} text-xs tabular-nums`}>
+                <span className={`w-2.5 h-2.5 rounded-full ${currentBadge.dot}`} />
+                <span className="font-bold">{currentBadge.text}</span>
               </div>
             </div>
 
@@ -1015,8 +1021,8 @@ export default function InsightsView() {
 
                     if (st.healthStatus === 'critical') {
                       statusPill = (
-                        <span className="inline-flex items-center space-x-1 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 px-1.5 sm:px-2 py-0.5 rounded-lg text-[9px] sm:text-[10px] font-bold animate-pulse">
-                          <XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-rose-600" />
+                        <span className="inline-flex items-center space-x-1 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                          <XCircle className="w-3 h-3 text-rose-600" />
                           <span>ควรเข้าตรวจเช็ก</span>
                         </span>
                       );
@@ -1073,11 +1079,11 @@ export default function InsightsView() {
       </div>
 
       {/* Official Corporate Footer */}
-      <footer className="mt-8 sm:mt-12 py-6 sm:py-8 bg-white dark:bg-[#130d1b] border-t border-[#7F3F98]/15 dark:border-[#7F3F98]/30 text-center text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 space-y-1 px-4 transition-colors">
+      <footer className="mt-10 py-6 bg-white dark:bg-[#15101C] border-t border-slate-200/80 dark:border-white/10 text-center text-xs text-slate-500 dark:text-slate-400 space-y-1 px-4">
         <p className="font-semibold text-slate-700 dark:text-slate-300">
           Copyright © 2026 แผนกบริการงานวิศวกรรม กองบริการลูกค้า
         </p>
-        <p className="text-slate-500 dark:text-slate-400">
+        <p>
           ฝ่ายวิศวกรรมและบริการ การไฟฟ้าส่วนภูมิภาค เขต 2 (ภาคเหนือ)
         </p>
       </footer>
