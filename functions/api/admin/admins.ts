@@ -45,7 +45,10 @@ export async function onRequestPost(context: any) {
       return new Response(JSON.stringify({ error: 'เบอร์นี้เป็น Admin อยู่แล้ว' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
-    await supabase.from('admin_users').insert({ phone_number: cleanPhone });
+    const { error: insertErr } = await supabase.from('admin_users').insert({ phone_number: cleanPhone });
+    if (insertErr) {
+      return new Response(JSON.stringify({ error: `ไม่สามารถบันทึกข้อมูลได้: ${insertErr.message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
 
     try {
       const db = env.DB;
@@ -76,7 +79,10 @@ export async function onRequestDelete(context: any) {
       return new Response(JSON.stringify({ error: 'ไม่สามารถลบได้ เนื่องจากต้องมี Admin อย่างน้อย 1 เบอร์' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
 
-    await supabase.from('admin_users').delete().eq('phone_number', phone);
+    const { error: deleteErr } = await supabase.from('admin_users').delete().eq('phone_number', phone);
+    if (deleteErr) {
+      return new Response(JSON.stringify({ error: `ไม่สามารถลบข้อมูลได้: ${deleteErr.message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
 
     try {
       const db = env.DB;

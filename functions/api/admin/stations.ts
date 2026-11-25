@@ -42,9 +42,13 @@ export async function onRequestPut(context: any) {
 
     // 1. Update Supabase
     const supabase = getSupabaseClient(env);
-    await supabase
+    const { error: upsertErr } = await supabase
       .from('station_owners')
       .upsert({ charger_name, phone_number: cleaned }, { onConflict: 'charger_name' });
+
+    if (upsertErr) {
+      return new Response(JSON.stringify({ error: `ไม่สามารถบันทึกข้อมูลสถานีได้: ${upsertErr.message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
 
     // 2. Update D1 if available
     try {

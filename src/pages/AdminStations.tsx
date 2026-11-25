@@ -79,15 +79,21 @@ export default function AdminStations() {
 
   const handleUpdateStation = async (charger_name: string, phone_number: string) => {
     try {
-      await fetch('/api/admin/stations', { 
+      const res = await fetch('/api/admin/stations', { 
         method: 'PUT', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ charger_name, phone_number }) 
       });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'ไม่สามารถบันทึกเบอร์โทรศัพท์ประจำสถานีได้');
+        return;
+      }
       setSavedStation(charger_name);
       setTimeout(() => setSavedStation(null), 2500);
     } catch (err) {
       console.error(err);
+      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกข้อมูลได้');
     }
   }
 
